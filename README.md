@@ -15,45 +15,95 @@ A voice-enabled conversational bot built with **Streamlit** that answers persona
 
 ---
 
+---
+
 ## 🚀 Getting Started
 
-### 1. Install Dependencies
+### 1. Clone the Repository
 
 ```bash
+git clone https://github.com/your-username/claude-voicebot.git
 cd claude-voicebot
-pip install -r requirements.txt
+```
 
-### 2. Run The App
+### 2. Install Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+Make sure `pyaudio` is installed correctly for microphone input. On some systems, you may need to install it separately:
+
+```bash
+pip install pipwin
+pipwin install pyaudio
+```
+
+### 3. Run the App
 
 ```bash
 streamlit run app.py
-st.markdown("---")
-st.markdown("""
-### 🚀 How to Use:
-1. **Get API Key**: Visit [Google AI Studio](https://makersuite.google.com/app/apikey) to get your free Gemini API key
-2. **Enter API Key**: Paste it in the sidebar configuration
-3. **Ask Questions**: Type your question or use voice input
-4. **Listen to Responses**: Click the play button to hear Claude's responses
+```
 
-### 📝 Setup Instructions for Deployment:
-1. Install required packages: `pip install streamlit google-generativeai speechrecognition gtts pyaudio`
-2. Run the app: `streamlit run app.py`
-3. For deployment on Streamlit Cloud, add packages to `requirements.txt`
+---
 
-**Note**: Voice input requires microphone permissions in your browser.
-""")
+## 💡 How to Use
 
-# Requirements.txt content for easy deployment
-st.markdown("---")
-st.header("📦 Requirements.txt for Deployment")
-st.code("""
+1. **Get Your Gemini API Key**  
+   - Visit [Google AI Studio](https://makersuite.google.com/app/apikey)  
+   - Copy your API key  
+
+2. **Paste API Key into App Sidebar**
+
+3. **Ask Questions**  
+   - Use microphone or type a message  
+
+4. **Listen to Responses**  
+   - Click the play button to hear the response  
+
+> 🎙️ *Note: Make sure to grant microphone permission in your browser.*
+
+---
+
+## 📝 Requirements.txt
+
+For deployment on Streamlit Cloud or local setup:
+
+```text
 streamlit
 google-generativeai
 speechrecognition
 gtts
 pyaudio
-""", language="text")
+```
 
+---
+
+## 🌐 Deployment on Streamlit Cloud
+
+1. Push this repo to GitHub  
+2. Go to [Streamlit Cloud](https://streamlit.io/cloud)  
+3. Connect your GitHub and deploy the app  
+4. Done! ✅
+
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License** – feel free to fork and use!
+
+---
+
+## 🙌 Acknowledgements
+
+- [Google Gemini API](https://ai.google.dev/)
+- [Streamlit](https://streamlit.io/)
+- [gTTS - Google Text-to-Speech](https://pypi.org/project/gTTS/)
+- [SpeechRecognition Library](https://pypi.org/project/SpeechRecognition/)
+
+---
+
+> Made with ❤️ by [SAIRAMREDDY VUYYURU]
 
 
 
