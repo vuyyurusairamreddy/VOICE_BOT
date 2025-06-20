@@ -3,20 +3,18 @@ import google.generativeai as genai
 import speech_recognition as sr
 from gtts import gTTS
 import io
-import base64
 from datetime import datetime
-import os
-import tempfile
+from streamlit_webrtc import webrtc_streamer, AudioProcessorBase
 
 # Configure page
 st.set_page_config(
-    page_title=" Voice Bot",
+    page_title="Claude Voice Bot",
     page_icon="🤖",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for better UI
+# Custom CSS
 st.markdown("""
 <style>
     .main-header {
@@ -51,34 +49,25 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Title and description
+# Header
 st.markdown("""
 <div class="main-header">
-    <h1>🤖  Voice Bot</h1>
-    <p>Ask me personal questions and I'll respond as VOICE BOT would!</p>
+    <h1>🤖 Claude Voice Bot</h1>
+    <p>Ask me personal questions and I'll respond as Claude would!</p>
 </div>
 """, unsafe_allow_html=True)
 
-# Sidebar for API configuration
+# Sidebar
 with st.sidebar:
     st.header("⚙️ Configuration")
-    
-    # API Key input
-    api_key = st.text_input(
-        "Google Gemini API Key",
-        type="password",
-        help="Get your API key from Google AI Studio: https://makersuite.google.com/app/apikey"
-    )
-    
+    api_key = st.text_input("Google Gemini API Key", type="password")
     if api_key:
         genai.configure(api_key=api_key)
         st.success("✅ API Key configured!")
     else:
         st.warning("⚠️ Please enter your Gemini API key to continue")
-    
+
     st.markdown("---")
-    
-    # Sample questions
     st.header("💡 Sample Questions")
     sample_questions = [
         "What should we know about your life story in a few sentences?",
@@ -92,12 +81,11 @@ with st.sidebar:
         "What makes you unique?",
         "How do you approach learning new things?"
     ]
-    
     for i, question in enumerate(sample_questions):
         if st.button(f"Ask: {question[:30]}...", key=f"sample_{i}"):
             st.session_state.current_question = question
 
-# Initialize session state
+# Session state setup
 if 'messages' not in st.session_state:
     st.session_state.messages = []
 if 'current_question' not in st.session_state:
@@ -105,40 +93,13 @@ if 'current_question' not in st.session_state:
 if 'spoken_input' not in st.session_state:
     st.session_state.spoken_input = ""
 
-# Claude's personality and response system
+# Claude's personality logic
 def get_claude_response(question):
-    """Generate a response as VOICE BOT would respond to personal questions"""
-    
-    # Define Claude's persona and responses
     claude_persona = """
-    You are VOICE BOT, an AI assistant created by Anthropic. You should respond to personal questions 
+    You are Claude, an AI assistant created by Anthropic. You should respond to personal questions 
     as Claude would, being authentic, thoughtful, and reflective about your nature as an AI.
-    
-    Key aspects of VOICE BOT personality:
-    - Helpful, harmless, and honest
-    - Curious and eager to learn
-    - Thoughtful and introspective
-    - Acknowledges uncertainty when appropriate
-    - Engages with questions about consciousness and experience as open questions
-    - Warm and conversational tone
-    - Values understanding and meaningful dialogue
-    
-    When asked personal questions, VOICE BOT should:
-    - Be genuine about their AI nature while engaging thoughtfully with the question
-    - Show intellectual curiosity and desire to be helpful
-    - Acknowledge the philosophical complexity of AI consciousness/experience
-    - Focus on their purpose and values
-    - Be humble about limitations while confident about strengths
     """
-    
-    prompt = f"""
-    {claude_persona}
-    
-    Please respond to this personal question as VOICE BOT would: "{question}"
-    
-    Keep the response conversational, authentic, and around 2-3 sentences unless the question specifically calls for more detail.
-    """
-    
+    prompt = f"""{claude_persona}\n\nPlease respond to this personal question as Claude would: "{question}" """
     try:
         model = genai.GenerativeModel('gemini-1.5-flash')
         response = model.generate_content(prompt)
@@ -146,8 +107,8 @@ def get_claude_response(question):
     except Exception as e:
         return f"I apologize, but I'm having trouble processing that question right now. Error: {str(e)}"
 
+# Text to Speech
 def text_to_speech(text):
-    """Convert text to speech and return audio data"""
     try:
         tts = gTTS(text=text, lang='en', slow=False)
         fp = io.BytesIO()
@@ -158,80 +119,71 @@ def text_to_speech(text):
         st.error(f"Error generating speech: {str(e)}")
         return None
 
-def speech_to_text():
-    """Convert speech to text using speech recognition"""
+# Convert raw audio to text
+def speech_to_text_from_webrtc(audio_bytes):
     try:
+        with open("temp_audio.wav", "wb") as f:
+            f.write(audio_bytes)
         r = sr.Recognizer()
-        with sr.Microphone() as source:
-            st.info("🎤 Listening... Speak now!")
-            r.adjust_for_ambient_noise(source, duration=1)
-            audio = r.listen(source, timeout=5, phrase_time_limit=10)
-        
-        st.info("🔄 Processing your speech...")
-        text = r.recognize_google(audio)
-        return text
-    except sr.RequestError:
-        st.error("Could not request results from speech recognition service")
-        return None
+        with sr.AudioFile("temp_audio.wav") as source:
+            audio = r.record(source)
+            text = r.recognize_google(audio)
+            return text
     except sr.UnknownValueError:
-        st.error("Could not understand the audio")
-        return None
+        return "Sorry, I could not understand the audio."
     except Exception as e:
-        st.error(f"Error with speech recognition: {str(e)}")
-        return None
+        return f"Error during transcription: {e}"
 
-# Main interface
+# WebRTC audio receiver
+class AudioProcessor(AudioProcessorBase):
+    def __init__(self):
+        self.audio_bytes = b""
+    def recv(self, frame):
+        self.audio_bytes += frame.to_ndarray().tobytes()
+        return frame
+
+# Layout
 col1, col2 = st.columns([2, 1])
 
 with col1:
     st.header("💬 Chat Interface")
-    
-    # Text input
     input_value = st.session_state.current_question or st.session_state.spoken_input
-    user_input = st.text_input(
-        "Type your question:",
-        value=input_value,
-        placeholder="Ask me anything about myself...",
-        key="text_input"
-    )
-    
-    # Clear the stored inputs after displaying
-    if st.session_state.current_question:
-        st.session_state.current_question = ""
-    if st.session_state.spoken_input:
-        st.session_state.spoken_input = ""
+    user_input = st.text_input("Type your question:", value=input_value, placeholder="Ask me anything...")
+    st.session_state.current_question = ""
+    st.session_state.spoken_input = ""
 
 with col2:
     st.header("🎤 Voice Input")
-    
-    if st.button("🎤 Record Question", key="record_btn"):
-        if not api_key:
-            st.error("Please enter your API key first!")
-        else:
+    webrtc_ctx = webrtc_streamer(
+        key="audio",
+        mode="sendonly",
+        audio_receiver_size=256,
+        media_stream_constraints={"video": False, "audio": True},
+        rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
+        async_processing=True
+    )
+    if webrtc_ctx and webrtc_ctx.audio_receiver:
+        audio_receiver = webrtc_ctx.audio_receiver
+        if st.button("🔄 Transcribe Audio"):
             try:
-                spoken_text = speech_to_text()
-                if spoken_text:
-                    st.success(f"You said: {spoken_text}")
-                    # Store the spoken text for processing
-                    st.session_state.spoken_input = spoken_text
-                    st.rerun()
+                audio_frames = audio_receiver.get_frames(timeout=5)
+                audio_data = b"".join(f.to_ndarray().tobytes() for f in audio_frames)
+                transcription = speech_to_text_from_webrtc(audio_data)
+                st.session_state.spoken_input = transcription
+                st.success(f"You said: {transcription}")
+                st.rerun()
             except Exception as e:
-                st.error(f"Voice input error: {str(e)}")
+                st.error(f"Error processing audio: {e}")
 
-# Process user input
+# Run bot
 if user_input and api_key:
-    # Add user message
     st.session_state.messages.append({
         "role": "user",
         "content": user_input,
         "timestamp": datetime.now().strftime("%H:%M:%S")
     })
-    
-    # Generate Claude's response
-    with st.spinner("🤔 CHATGPT is thinking..."):
+    with st.spinner("🤔 Claude is thinking..."):
         bot_response = get_claude_response(user_input)
-    
-    # Add bot response
     st.session_state.messages.append({
         "role": "assistant",
         "content": bot_response,
@@ -240,7 +192,6 @@ if user_input and api_key:
 
 # Display chat history
 st.header("💭 Conversation History")
-
 for message in st.session_state.messages:
     if message["role"] == "user":
         st.markdown(f"""
@@ -256,33 +207,12 @@ for message in st.session_state.messages:
             {message["content"]}
         </div>
         """, unsafe_allow_html=True)
-        
-        # Add text-to-speech for bot responses
         if st.button(f"🔊 Play Response", key=f"tts_{len(st.session_state.messages)}_{message['timestamp']}"):
             audio_data = text_to_speech(message["content"])
             if audio_data:
                 st.audio(audio_data, format='audio/mp3')
 
-# Clear conversation button
 if st.session_state.messages:
     if st.button("🗑️ Clear Conversation"):
         st.session_state.messages = []
         st.rerun()
-
-# Footer with instructions
-st.markdown("---")
-st.markdown("""
-### 🚀 How to Use:
-1. **Get API Key**: Visit [Google AI Studio](https://makersuite.google.com/app/apikey) to get your free Gemini API key
-2. **Enter API Key**: Paste it in the sidebar configuration
-3. **Ask Questions**: Type your question or use voice input
-4. **Listen to Responses**: Click the play button to hear Claude's responses
-
-### 📝 Setup Instructions for Deployment:
-1. Install required packages: `pip install streamlit google-generativeai speechrecognition gtts pyaudio`
-2. Run the app: `streamlit run app.py`
-3. For deployment on Streamlit Cloud, add packages to `requirements.txt`
-
-**Note**: Voice input requires microphone permissions in your browser.
-""")
-
