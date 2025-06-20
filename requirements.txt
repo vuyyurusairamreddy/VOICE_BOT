@@ -2,4 +2,4 @@ streamlit
 google-generativeai
 speechrecognition
 gtts
-pyaudio
+#pyaudio
