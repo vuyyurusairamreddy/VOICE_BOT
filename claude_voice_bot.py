@@ -425,4 +425,5 @@ st.markdown("""
    - Type your question in the text input
    - Use voice input (browser-based speech recognition)
    - Upload audio files for manual transcription
-4. **Listen to Responses**: Click the play button to hear Claude's responses
+4. **Listen to Responses**: Click the play button to hear Claude's responses 
+""")
