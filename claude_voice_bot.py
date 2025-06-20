@@ -108,6 +108,8 @@ if 'messages' not in st.session_state:
     st.session_state.messages = []
 if 'current_question' not in st.session_state:
     st.session_state.current_question = ""
+if 'last_voice_text' not in st.session_state:
+    st.session_state.last_voice_text = ""
 
 # Claude's personality and response system
 def get_claude_response(question):
@@ -162,187 +164,184 @@ def text_to_speech(text):
         st.error(f"Error generating speech: {str(e)}")
         return None
 
-# Browser-based speech recognition using HTML5
-def render_speech_input():
-    """Render HTML5 speech recognition interface"""
-    html_code = """
-    <div class="audio-container">
-        <h4>🎤 Voice Input</h4>
+# Simplified voice input using session state
+def render_voice_interface():
+    """Render a simple voice interface with manual copy"""
+    st.markdown("### 🎤 Voice Input")
+    
+    col1, col2 = st.columns([1, 1])
+    
+    with col1:
+        if st.button("🎤 Click to Record Voice", key="voice_record_btn"):
+            st.info("After clicking, use the voice recorder below and copy the result manually.")
+    
+    with col2:
+        if st.button("📋 Auto-Fill Last Recognition", key="auto_fill_btn"):
+            if 'last_voice_text' in st.session_state and st.session_state.last_voice_text:
+                st.session_state.current_question = st.session_state.last_voice_text
+                st.success(f"✅ Filled: {st.session_state.last_voice_text}")
+                st.rerun()
+            else:
+                st.warning("No voice text to fill. Please record something first.")
+
+    # Simple HTML5 voice recorder
+    html_code = f"""
+    <div style="padding: 20px; border: 2px solid #ddd; border-radius: 10px; margin: 10px 0;">
+        <h4>🎤 Browser Voice Recognition</h4>
+        
         <button id="startBtn" onclick="startRecording()" style="
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 20px;
-            cursor: pointer;
-            margin: 5px;
-        ">🎤 Start Recording</button>
+            background: #4CAF50; color: white; border: none; padding: 12px 24px; 
+            border-radius: 8px; cursor: pointer; margin: 5px; font-size: 16px;">
+            🎤 Start Recording
+        </button>
         
         <button id="stopBtn" onclick="stopRecording()" disabled style="
-            background: #dc3545;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 20px;
-            cursor: pointer;
-            margin: 5px;
-        ">⏹️ Stop Recording</button>
+            background: #f44336; color: white; border: none; padding: 12px 24px; 
+            border-radius: 8px; cursor: pointer; margin: 5px; font-size: 16px;">
+            ⏹️ Stop Recording
+        </button>
         
-        <div id="status" style="margin: 10px 0; font-weight: bold;"></div>
+        <div id="status" style="margin: 15px 0; font-weight: bold; font-size: 18px;"></div>
+        
         <div id="result" style="
-            margin: 10px 0;
-            padding: 10px;
-            background: #f8f9fa;
-            border-radius: 5px;
-            min-height: 50px;
-            border: 1px solid #dee2e6;
-        "></div>
+            margin: 15px 0; padding: 15px; background: #f0f8ff; border-radius: 8px; 
+            min-height: 60px; border: 2px solid #87CEEB; font-size: 16px;
+        ">Voice recognition result will appear here...</div>
         
-        <button id="useBtn" onclick="useTranscript()" disabled style="
-            background: #28a745;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 15px;
-            cursor: pointer;
-            margin: 5px;
-        ">✅ Use This Text</button>
+        <button id="copyBtn" onclick="copyText()" disabled style="
+            background: #2196F3; color: white; border: none; padding: 10px 20px; 
+            border-radius: 8px; cursor: pointer; margin: 5px; font-size: 14px;">
+            📋 Copy Text
+        </button>
+        
+        <div id="instructions" style="
+            margin: 15px 0; padding: 10px; background: #fffacd; border-radius: 8px; 
+            border-left: 4px solid #ffd700; font-size: 14px;">
+            <strong>Instructions:</strong><br>
+            1. Click "Start Recording" and speak clearly<br>
+            2. Click "Stop Recording" when done<br>
+            3. Copy the recognized text<br>
+            4. Paste it in the input field above<br>
+            5. Or click "Auto-Fill Last Recognition" button
+        </div>
     </div>
 
     <script>
         let recognition;
         let isRecording = false;
-        let transcript = '';
+        let finalTranscript = '';
 
-        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        // Initialize speech recognition
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {{
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             recognition = new SpeechRecognition();
-            recognition.continuous = true;
+            recognition.continuous = false;
             recognition.interimResults = true;
             recognition.lang = 'en-US';
 
-            recognition.onstart = function() {
-                document.getElementById('status').textContent = '🎤 Listening... Speak now!';
+            recognition.onstart = function() {{
+                document.getElementById('status').innerHTML = '🎤 <span style="color: red;">Listening... Speak now!</span>';
                 document.getElementById('startBtn').disabled = true;
                 document.getElementById('stopBtn').disabled = false;
                 isRecording = true;
-            };
+                finalTranscript = '';
+            }};
 
-            recognition.onresult = function(event) {
+            recognition.onresult = function(event) {{
                 let interimTranscript = '';
-                let finalTranscript = '';
+                finalTranscript = '';
 
-                for (let i = event.resultIndex; i < event.results.length; i++) {
-                    if (event.results[i].isFinal) {
+                for (let i = event.resultIndex; i < event.results.length; i++) {{
+                    if (event.results[i].isFinal) {{
                         finalTranscript += event.results[i][0].transcript;
-                    } else {
+                    }} else {{
                         interimTranscript += event.results[i][0].transcript;
-                    }
-                }
+                    }}
+                }}
 
-                transcript = finalTranscript;
-                document.getElementById('result').innerHTML = 
-                    '<strong>Final:</strong> ' + finalTranscript + 
-                    '<br><em>Interim:</em> ' + interimTranscript;
+                let displayText = '';
+                if (finalTranscript) {{
+                    displayText += '<strong style="color: green;">Final:</strong> ' + finalTranscript + '<br>';
+                }}
+                if (interimTranscript) {{
+                    displayText += '<em style="color: blue;">Listening:</em> ' + interimTranscript;
+                }}
                 
-                if (finalTranscript) {
-                    document.getElementById('useBtn').disabled = false;
-                }
-            };
+                document.getElementById('result').innerHTML = displayText || 'Waiting for speech...';
+                
+                if (finalTranscript.trim()) {{
+                    document.getElementById('copyBtn').disabled = false;
+                    document.getElementById('status').innerHTML = '✅ <span style="color: green;">Recognition complete! Copy the text below.</span>';
+                }}
+            }};
 
-            recognition.onerror = function(event) {
-                document.getElementById('status').textContent = '❌ Error: ' + event.error;
+            recognition.onerror = function(event) {{
+                document.getElementById('status').innerHTML = '❌ <span style="color: red;">Error: ' + event.error + '</span>';
                 resetButtons();
-            };
+            }};
 
-            recognition.onend = function() {
-                document.getElementById('status').textContent = '🔄 Processing complete';
+            recognition.onend = function() {{
+                if (finalTranscript.trim()) {{
+                    document.getElementById('status').innerHTML = '✅ <span style="color: green;">Done! Copy the text and paste it above.</span>';
+                }} else {{
+                    document.getElementById('status').innerHTML = '⚠️ <span style="color: orange;">No speech detected. Try again.</span>';
+                }}
                 resetButtons();
-            };
-        } else {
-            document.getElementById('status').textContent = '❌ Speech recognition not supported in this browser';
+            }};
+        }} else {{
+            document.getElementById('status').innerHTML = '❌ <span style="color: red;">Speech recognition not supported in this browser</span>';
             document.getElementById('startBtn').disabled = true;
-        }
+        }}
 
-        function startRecording() {
-            if (recognition && !isRecording) {
+        function startRecording() {{
+            if (recognition && !isRecording) {{
                 recognition.start();
-            }
-        }
+            }}
+        }}
 
-        function stopRecording() {
-            if (recognition && isRecording) {
+        function stopRecording() {{
+            if (recognition && isRecording) {{
                 recognition.stop();
-            }
-        }
+            }}
+        }}
 
-        function resetButtons() {
+        function resetButtons() {{
             document.getElementById('startBtn').disabled = false;
             document.getElementById('stopBtn').disabled = true;
             isRecording = false;
-        }
+        }}
 
-        function useTranscript() {
-            if (transcript) {
-                // Multiple attempts to find and update the Streamlit input
-                const selectors = [
-                    'input[aria-label="Type your question:"]',
-                    'input[data-testid="stTextInput"]',
-                    'input[placeholder*="Ask me anything"]',
-                    'input[type="text"]'
-                ];
-                
-                let textInput = null;
-                
-                // Try in parent document first
-                for (const selector of selectors) {
-                    textInput = parent.document.querySelector(selector);
-                    if (textInput) break;
-                }
-                
-                // Try in current document if not found
-                if (!textInput) {
-                    for (const selector of selectors) {
-                        textInput = document.querySelector(selector);
-                        if (textInput) break;
-                    }
-                }
-                
-                if (textInput) {
-                    // Set the value and trigger events
-                    textInput.value = transcript;
-                    textInput.focus();
+        function copyText() {{
+            if (finalTranscript.trim()) {{
+                navigator.clipboard.writeText(finalTranscript.trim()).then(function() {{
+                    document.getElementById('status').innerHTML = '📋 <span style="color: blue;">Text copied to clipboard! Paste it in the input field above.</span>';
                     
-                    // Trigger multiple events to ensure Streamlit detects the change
-                    const events = ['input', 'change', 'keyup', 'blur'];
-                    events.forEach(eventType => {
-                        const event = new Event(eventType, { bubbles: true, cancelable: true });
-                        textInput.dispatchEvent(event);
-                    });
+                    // Try to store in session state for auto-fill button
+                    window.parent.postMessage({{
+                        type: 'voice_text',
+                        text: finalTranscript.trim()
+                    }}, '*');
                     
-                    // Also try React-style events
-                    if (textInput._valueTracker) {
-                        textInput._valueTracker.setValue('');
-                    }
+                }}).catch(function() {{
+                    document.getElementById('status').innerHTML = '❌ <span style="color: red;">Could not copy to clipboard. Please select and copy manually.</span>';
                     
-                    // Set selection to trigger React onChange
-                    textInput.setSelectionRange(transcript.length, transcript.length);
-                    
-                    document.getElementById('status').textContent = '✅ Text sent to input field!';
-                } else {
-                    // Fallback: Show instructions to copy manually
-                    document.getElementById('status').innerHTML = 
-                        '⚠️ Could not auto-fill. Please copy this text: <br><strong>"' + transcript + '"</strong>';
-                    
-                    // Copy to clipboard as fallback
-                    navigator.clipboard.writeText(transcript).then(() => {
-                        document.getElementById('status').innerHTML += '<br>📋 Text copied to clipboard! Paste it in the input above.';
-                    }).catch(() => {
-                        document.getElementById('status').innerHTML += '<br>Please manually copy the text above.';
-                    });
-                }
-            }
-        }
+                    // Select the text for manual copying
+                    const range = document.createRange();
+                    range.selectNodeContents(document.getElementById('result'));
+                    const selection = window.getSelection();
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                }});
+            }}
+        }}
+
+        // Listen for messages from parent
+        window.addEventListener('message', function(event) {{
+            if (event.data.type === 'voice_text') {{
+                // This could be used for session state if needed
+                console.log('Voice text received:', event.data.text);
+            }}
+        }});
     </script>
     """
     return html_code
@@ -363,30 +362,11 @@ user_input = st.text_input(
 if st.session_state.current_question:
     st.session_state.current_question = ""
 
-# Alternative: Direct session state approach
-st.header("🎤 Quick Voice Input")
+# Voice input with simple manual process
+render_voice_interface()
 
-# Add a manual input field for voice results
-if 'voice_input' not in st.session_state:
-    st.session_state.voice_input = ""
-
-# Manual input field that users can paste into
-voice_text = st.text_input(
-    "Voice Recognition Result (paste here if auto-fill doesn't work):",
-    value=st.session_state.voice_input,
-    placeholder="The recognized text will appear here...",
-    key="voice_manual_input"
-)
-
-if voice_text and voice_text != st.session_state.voice_input:
-    st.session_state.voice_input = voice_text
-    # Auto-copy to main input
-    st.session_state.current_question = voice_text
-    st.rerun()
-
-# Voice input section
-st.markdown("---")
-st.components.v1.html(render_speech_input(), height=300)
+# Voice input section - render the HTML interface
+st.components.v1.html(render_voice_interface(), height=400)
 
 # Alternative file upload for audio
 st.header("📁 Audio File Upload")
