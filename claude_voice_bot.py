@@ -167,23 +167,6 @@ def text_to_speech(text):
 # Simplified voice input using session state
 def render_voice_interface():
     """Render a simple voice interface with manual copy"""
-    st.markdown("### 🎤 Voice Input")
-    
-    col1, col2 = st.columns([1, 1])
-    
-    with col1:
-        if st.button("🎤 Click to Record Voice", key="voice_record_btn"):
-            st.info("After clicking, use the voice recorder below and copy the result manually.")
-    
-    with col2:
-        if st.button("📋 Auto-Fill Last Recognition", key="auto_fill_btn"):
-            if 'last_voice_text' in st.session_state and st.session_state.last_voice_text:
-                st.session_state.current_question = st.session_state.last_voice_text
-                st.success(f"✅ Filled: {st.session_state.last_voice_text}")
-                st.rerun()
-            else:
-                st.warning("No voice text to fill. Please record something first.")
-
     # Simple HTML5 voice recorder
     html_code = f"""
     <div style="padding: 20px; border: 2px solid #ddd; border-radius: 10px; margin: 10px 0;">
@@ -363,7 +346,22 @@ if st.session_state.current_question:
     st.session_state.current_question = ""
 
 # Voice input with simple manual process
-render_voice_interface()
+st.markdown("### 🎤 Voice Input")
+st.info("Use the voice recorder below, then copy and paste the recognized text into the main input field above.")
+
+# Manual text input for voice results
+voice_result = st.text_input(
+    "Voice Recognition Result:",
+    placeholder="Recognized text will appear here after you copy it...",
+    key="voice_result_input",
+    help="After recording, copy the recognized text from below and paste it here, then click 'Use Voice Text'"
+)
+
+if voice_result:
+    if st.button("📝 Use Voice Text", key="use_voice_btn"):
+        st.session_state.current_question = voice_result
+        st.success(f"✅ Using: {voice_result}")
+        st.rerun()
 
 # Voice input section - render the HTML interface
 st.components.v1.html(render_voice_interface(), height=400)
