@@ -349,7 +349,7 @@ if voice_result:
         st.rerun()
 
 # Voice interface
-st.components.v1.html(render_voice_interface(), height=400, key="voice_interface_component")
+#st.components.v1.html(render_voice_interface(), height=400, key="voice_interface_component")
 
 # Audio upload
 st.header("📁 Audio File Upload")
