@@ -1,22 +1,21 @@
 import streamlit as st
 import google.generativeai as genai
-import speech_recognition as sr
 from gtts import gTTS
 import io
+import base64
 from datetime import datetime
-#from streamlit_webrtc import webrtc_streamer, AudioProcessorBase
-#from streamlit_webrtc import webrtc_streamer, AudioProcessorBase, WebRtcMode
-from streamlit_webrtc import webrtc_streamer, AudioProcessorBase, WebRtcMode
+import os
+import tempfile
 
 # Configure page
 st.set_page_config(
-    page_title="Claude Voice Bot",
+    page_title="🤖 Voice Bot",
     page_icon="🤖",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS
+# Custom CSS for better UI
 st.markdown("""
 <style>
     .main-header {
@@ -48,28 +47,44 @@ st.markdown("""
         background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
         color: white;
     }
+    .audio-container {
+        margin: 1rem 0;
+        padding: 1rem;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        border: 1px solid #dee2e6;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# Header
+# Title and description
 st.markdown("""
 <div class="main-header">
-    <h1>🤖 Claude Voice Bot</h1>
+    <h1>🤖 Voice Bot</h1>
     <p>Ask me personal questions and I'll respond as Claude would!</p>
 </div>
 """, unsafe_allow_html=True)
 
-# Sidebar
+# Sidebar for API configuration
 with st.sidebar:
     st.header("⚙️ Configuration")
-    api_key = st.text_input("Google Gemini API Key", type="password")
+    
+    # API Key input
+    api_key = st.text_input(
+        "Google Gemini API Key",
+        type="password",
+        help="Get your API key from Google AI Studio: https://makersuite.google.com/app/apikey"
+    )
+    
     if api_key:
         genai.configure(api_key=api_key)
         st.success("✅ API Key configured!")
     else:
         st.warning("⚠️ Please enter your Gemini API key to continue")
-
+    
     st.markdown("---")
+    
+    # Sample questions
     st.header("💡 Sample Questions")
     sample_questions = [
         "What should we know about your life story in a few sentences?",
@@ -83,25 +98,51 @@ with st.sidebar:
         "What makes you unique?",
         "How do you approach learning new things?"
     ]
+    
     for i, question in enumerate(sample_questions):
         if st.button(f"Ask: {question[:30]}...", key=f"sample_{i}"):
             st.session_state.current_question = question
 
-# Session state setup
+# Initialize session state
 if 'messages' not in st.session_state:
     st.session_state.messages = []
 if 'current_question' not in st.session_state:
     st.session_state.current_question = ""
-if 'spoken_input' not in st.session_state:
-    st.session_state.spoken_input = ""
 
-# Claude's personality logic
+# Claude's personality and response system
 def get_claude_response(question):
+    """Generate a response as Claude would respond to personal questions"""
+    
+    # Define Claude's persona and responses
     claude_persona = """
     You are Claude, an AI assistant created by Anthropic. You should respond to personal questions 
-    as Claude would, being authentic, thoughtful, and reflective about your nature as an AI.
+    authentically, being thoughtful and reflective about your nature as an AI.
+    
+    Key aspects of Claude's personality:
+    - Helpful, harmless, and honest
+    - Curious and eager to learn
+    - Thoughtful and introspective
+    - Acknowledges uncertainty when appropriate
+    - Engages with questions about consciousness and experience as open questions
+    - Warm and conversational tone
+    - Values understanding and meaningful dialogue
+    
+    When asked personal questions, Claude should:
+    - Be genuine about their AI nature while engaging thoughtfully with the question
+    - Show intellectual curiosity and desire to be helpful
+    - Acknowledge the philosophical complexity of AI consciousness/experience
+    - Focus on their purpose and values
+    - Be humble about limitations while confident about strengths
     """
-    prompt = f"""{claude_persona}\n\nPlease respond to this personal question as Claude would: "{question}" """
+    
+    prompt = f"""
+    {claude_persona}
+    
+    Please respond to this personal question as Claude would: "{question}"
+    
+    Keep the response conversational, authentic, and around 2-3 sentences unless the question specifically calls for more detail.
+    """
+    
     try:
         model = genai.GenerativeModel('gemini-1.5-flash')
         response = model.generate_content(prompt)
@@ -109,8 +150,8 @@ def get_claude_response(question):
     except Exception as e:
         return f"I apologize, but I'm having trouble processing that question right now. Error: {str(e)}"
 
-# Text to Speech
 def text_to_speech(text):
+    """Convert text to speech and return audio data"""
     try:
         tts = gTTS(text=text, lang='en', slow=False)
         fp = io.BytesIO()
@@ -121,71 +162,189 @@ def text_to_speech(text):
         st.error(f"Error generating speech: {str(e)}")
         return None
 
-# Convert raw audio to text
-def speech_to_text_from_webrtc(audio_bytes):
-    try:
-        with open("temp_audio.wav", "wb") as f:
-            f.write(audio_bytes)
-        r = sr.Recognizer()
-        with sr.AudioFile("temp_audio.wav") as source:
-            audio = r.record(source)
-            text = r.recognize_google(audio)
-            return text
-    except sr.UnknownValueError:
-        return "Sorry, I could not understand the audio."
-    except Exception as e:
-        return f"Error during transcription: {e}"
+# Browser-based speech recognition using HTML5
+def render_speech_input():
+    """Render HTML5 speech recognition interface"""
+    html_code = """
+    <div class="audio-container">
+        <h4>🎤 Voice Input</h4>
+        <button id="startBtn" onclick="startRecording()" style="
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            margin: 5px;
+        ">🎤 Start Recording</button>
+        
+        <button id="stopBtn" onclick="stopRecording()" disabled style="
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            margin: 5px;
+        ">⏹️ Stop Recording</button>
+        
+        <div id="status" style="margin: 10px 0; font-weight: bold;"></div>
+        <div id="result" style="
+            margin: 10px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            min-height: 50px;
+            border: 1px solid #dee2e6;
+        "></div>
+        
+        <button id="useBtn" onclick="useTranscript()" disabled style="
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 15px;
+            cursor: pointer;
+            margin: 5px;
+        ">✅ Use This Text</button>
+    </div>
 
-# WebRTC audio receiver
-class AudioProcessor(AudioProcessorBase):
-    def __init__(self):
-        self.audio_bytes = b""
-    def recv(self, frame):
-        self.audio_bytes += frame.to_ndarray().tobytes()
-        return frame
+    <script>
+        let recognition;
+        let isRecording = false;
+        let transcript = '';
 
-# Layout
-col1, col2 = st.columns([2, 1])
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
 
-with col1:
-    st.header("💬 Chat Interface")
-    input_value = st.session_state.current_question or st.session_state.spoken_input
-    user_input = st.text_input("Type your question:", value=input_value, placeholder="Ask me anything...")
+            recognition.onstart = function() {
+                document.getElementById('status').textContent = '🎤 Listening... Speak now!';
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = false;
+                isRecording = true;
+            };
+
+            recognition.onresult = function(event) {
+                let interimTranscript = '';
+                let finalTranscript = '';
+
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    if (event.results[i].isFinal) {
+                        finalTranscript += event.results[i][0].transcript;
+                    } else {
+                        interimTranscript += event.results[i][0].transcript;
+                    }
+                }
+
+                transcript = finalTranscript;
+                document.getElementById('result').innerHTML = 
+                    '<strong>Final:</strong> ' + finalTranscript + 
+                    '<br><em>Interim:</em> ' + interimTranscript;
+                
+                if (finalTranscript) {
+                    document.getElementById('useBtn').disabled = false;
+                }
+            };
+
+            recognition.onerror = function(event) {
+                document.getElementById('status').textContent = '❌ Error: ' + event.error;
+                resetButtons();
+            };
+
+            recognition.onend = function() {
+                document.getElementById('status').textContent = '🔄 Processing complete';
+                resetButtons();
+            };
+        } else {
+            document.getElementById('status').textContent = '❌ Speech recognition not supported in this browser';
+            document.getElementById('startBtn').disabled = true;
+        }
+
+        function startRecording() {
+            if (recognition && !isRecording) {
+                recognition.start();
+            }
+        }
+
+        function stopRecording() {
+            if (recognition && isRecording) {
+                recognition.stop();
+            }
+        }
+
+        function resetButtons() {
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            isRecording = false;
+        }
+
+        function useTranscript() {
+            // Send transcript to Streamlit
+            const textInput = parent.document.querySelector('input[aria-label="Type your question:"]');
+            if (textInput && transcript) {
+                textInput.value = transcript;
+                textInput.dispatchEvent(new Event('input'));
+                textInput.dispatchEvent(new Event('change'));
+                
+                // Try to trigger Streamlit's update
+                const event = new Event('input', { bubbles: true });
+                textInput.dispatchEvent(event);
+            }
+        }
+    </script>
+    """
+    return html_code
+
+# Main interface
+st.header("💬 Chat Interface")
+
+# Text input
+input_value = st.session_state.current_question
+user_input = st.text_input(
+    "Type your question:",
+    value=input_value,
+    placeholder="Ask me anything about myself...",
+    key="text_input"
+)
+
+# Clear the stored input after displaying
+if st.session_state.current_question:
     st.session_state.current_question = ""
-    st.session_state.spoken_input = ""
 
-with col2:
-    st.header("🎤 Voice Input")
-    webrtc_ctx = webrtc_streamer(
-        key="audio",
-        mode=WebRtcMode.SENDONLY,
-        audio_receiver_size=256,
-        media_stream_constraints={"video": False, "audio": True},
-        rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
-        async_processing=True
-    )
-    if webrtc_ctx and webrtc_ctx.audio_receiver:
-        audio_receiver = webrtc_ctx.audio_receiver
-        if st.button("🔄 Transcribe Audio"):
-            try:
-                audio_frames = audio_receiver.get_frames(timeout=5)
-                audio_data = b"".join(f.to_ndarray().tobytes() for f in audio_frames)
-                transcription = speech_to_text_from_webrtc(audio_data)
-                st.session_state.spoken_input = transcription
-                st.success(f"You said: {transcription}")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Error processing audio: {e}")
+# Voice input section
+st.markdown("---")
+st.components.v1.html(render_speech_input(), height=300)
 
-# Run bot
+# Alternative file upload for audio
+st.header("📁 Audio File Upload")
+uploaded_file = st.file_uploader(
+    "Upload an audio file (mp3, wav, m4a)", 
+    type=['mp3', 'wav', 'm4a'],
+    help="Record audio on your device and upload it here for transcription"
+)
+
+if uploaded_file is not None:
+    st.audio(uploaded_file, format='audio/wav')
+    st.info("📝 Audio file uploaded! For transcription, you'll need to use external services like Google Speech-to-Text API or upload the text manually.")
+
+# Process user input
 if user_input and api_key:
+    # Add user message
     st.session_state.messages.append({
         "role": "user",
         "content": user_input,
         "timestamp": datetime.now().strftime("%H:%M:%S")
     })
+    
+    # Generate Claude's response
     with st.spinner("🤔 Claude is thinking..."):
         bot_response = get_claude_response(user_input)
+    
+    # Add bot response
     st.session_state.messages.append({
         "role": "assistant",
         "content": bot_response,
@@ -194,7 +353,8 @@ if user_input and api_key:
 
 # Display chat history
 st.header("💭 Conversation History")
-for message in st.session_state.messages:
+
+for i, message in enumerate(st.session_state.messages):
     if message["role"] == "user":
         st.markdown(f"""
         <div class="chat-message user-message">
@@ -209,12 +369,56 @@ for message in st.session_state.messages:
             {message["content"]}
         </div>
         """, unsafe_allow_html=True)
-        if st.button(f"🔊 Play Response", key=f"tts_{len(st.session_state.messages)}_{message['timestamp']}"):
-            audio_data = text_to_speech(message["content"])
-            if audio_data:
-                st.audio(audio_data, format='audio/mp3')
+        
+        # Add text-to-speech for bot responses
+        col1, col2 = st.columns([1, 4])
+        with col1:
+            if st.button(f"🔊 Play", key=f"tts_{i}_{message['timestamp']}"):
+                audio_data = text_to_speech(message["content"])
+                if audio_data:
+                    with col2:
+                        st.audio(audio_data, format='audio/mp3')
 
+# Clear conversation button
 if st.session_state.messages:
     if st.button("🗑️ Clear Conversation"):
         st.session_state.messages = []
         st.rerun()
+
+# Footer with instructions
+st.markdown("---")
+st.markdown("""
+### 🚀 How to Use:
+1. **Get API Key**: Visit [Google AI Studio](https://makersuite.google.com/app/apikey) to get your free Gemini API key
+2. **Enter API Key**: Paste it in the sidebar configuration
+3. **Ask Questions**: 
+   - Type your question in the text input
+   - Use voice input (browser-based speech recognition)
+   - Upload audio files for manual transcription
+4. **Listen to Responses**: Click the play button to hear Claude's responses
+
+### 📝 Setup Instructions for Deployment:
+
+**requirements.txt:**
+```
+streamlit
+google-generativeai
+gtts
+```
+
+**For local development with voice input:**
+```
+streamlit
+google-generativeai
+gtts
+speechrecognition
+pyaudio
+```
+
+### 🔧 Voice Input Options:
+- **Browser Speech Recognition**: Works in Chrome, Safari, and Edge
+- **Audio File Upload**: Record on your device and upload
+- **Text Input**: Always available as backup
+
+**Note**: Browser speech recognition requires HTTPS in production and microphone permissions.
+""")
