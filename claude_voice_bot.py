@@ -4,7 +4,8 @@ import speech_recognition as sr
 from gtts import gTTS
 import io
 from datetime import datetime
-from streamlit_webrtc import webrtc_streamer, AudioProcessorBase
+#from streamlit_webrtc import webrtc_streamer, AudioProcessorBase
+from streamlit_webrtc import webrtc_streamer, AudioProcessorBase, WebRtcMode
 
 # Configure page
 st.set_page_config(
@@ -156,7 +157,7 @@ with col2:
     st.header("🎤 Voice Input")
     webrtc_ctx = webrtc_streamer(
         key="audio",
-        mode="sendonly",
+        mode=WebRtcMode.SENDONLY,
         audio_receiver_size=256,
         media_stream_constraints={"video": False, "audio": True},
         rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
