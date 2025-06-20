@@ -283,16 +283,64 @@ def render_speech_input():
         }
 
         function useTranscript() {
-            // Send transcript to Streamlit
-            const textInput = parent.document.querySelector('input[aria-label="Type your question:"]');
-            if (textInput && transcript) {
-                textInput.value = transcript;
-                textInput.dispatchEvent(new Event('input'));
-                textInput.dispatchEvent(new Event('change'));
+            if (transcript) {
+                // Multiple attempts to find and update the Streamlit input
+                const selectors = [
+                    'input[aria-label="Type your question:"]',
+                    'input[data-testid="stTextInput"]',
+                    'input[placeholder*="Ask me anything"]',
+                    'input[type="text"]'
+                ];
                 
-                // Try to trigger Streamlit's update
-                const event = new Event('input', { bubbles: true });
-                textInput.dispatchEvent(event);
+                let textInput = null;
+                
+                // Try in parent document first
+                for (const selector of selectors) {
+                    textInput = parent.document.querySelector(selector);
+                    if (textInput) break;
+                }
+                
+                // Try in current document if not found
+                if (!textInput) {
+                    for (const selector of selectors) {
+                        textInput = document.querySelector(selector);
+                        if (textInput) break;
+                    }
+                }
+                
+                if (textInput) {
+                    // Set the value and trigger events
+                    textInput.value = transcript;
+                    textInput.focus();
+                    
+                    // Trigger multiple events to ensure Streamlit detects the change
+                    const events = ['input', 'change', 'keyup', 'blur'];
+                    events.forEach(eventType => {
+                        const event = new Event(eventType, { bubbles: true, cancelable: true });
+                        textInput.dispatchEvent(event);
+                    });
+                    
+                    // Also try React-style events
+                    if (textInput._valueTracker) {
+                        textInput._valueTracker.setValue('');
+                    }
+                    
+                    // Set selection to trigger React onChange
+                    textInput.setSelectionRange(transcript.length, transcript.length);
+                    
+                    document.getElementById('status').textContent = '✅ Text sent to input field!';
+                } else {
+                    // Fallback: Show instructions to copy manually
+                    document.getElementById('status').innerHTML = 
+                        '⚠️ Could not auto-fill. Please copy this text: <br><strong>"' + transcript + '"</strong>';
+                    
+                    // Copy to clipboard as fallback
+                    navigator.clipboard.writeText(transcript).then(() => {
+                        document.getElementById('status').innerHTML += '<br>📋 Text copied to clipboard! Paste it in the input above.';
+                    }).catch(() => {
+                        document.getElementById('status').innerHTML += '<br>Please manually copy the text above.';
+                    });
+                }
             }
         }
     </script>
@@ -314,6 +362,27 @@ user_input = st.text_input(
 # Clear the stored input after displaying
 if st.session_state.current_question:
     st.session_state.current_question = ""
+
+# Alternative: Direct session state approach
+st.header("🎤 Quick Voice Input")
+
+# Add a manual input field for voice results
+if 'voice_input' not in st.session_state:
+    st.session_state.voice_input = ""
+
+# Manual input field that users can paste into
+voice_text = st.text_input(
+    "Voice Recognition Result (paste here if auto-fill doesn't work):",
+    value=st.session_state.voice_input,
+    placeholder="The recognized text will appear here...",
+    key="voice_manual_input"
+)
+
+if voice_text and voice_text != st.session_state.voice_input:
+    st.session_state.voice_input = voice_text
+    # Auto-copy to main input
+    st.session_state.current_question = voice_text
+    st.rerun()
 
 # Voice input section
 st.markdown("---")
